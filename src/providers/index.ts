@@ -37,14 +37,38 @@ class UnifiedProxyEndpoint extends OpenAPIRoute {
         const result = await resolveChannel(c, routeId)
         if (result instanceof Response) return result
 
-        const { channel, requestBody, saveUsage } = result
+        const { candidates } = result
+        let lastFailure: Response | null = null
 
-        const provider = getProvider(channel.config.type || "")
-        if (!provider) {
-            return c.text("Channel type not supported", 400)
+        for (const candidate of candidates) {
+            const provider = getProvider(candidate.channel.config.type || "")
+            if (!provider) {
+                continue
+            }
+
+            try {
+                const response = await provider(
+                    c,
+                    candidate.channel.config,
+                    candidate.requestBody,
+                    candidate.saveUsage
+                )
+
+                return response
+            } catch (error) {
+                console.error(
+                    `Channel request error, retrying next channel: ${candidate.channel.key}`,
+                    error
+                )
+                lastFailure = c.text("Upstream channel request failed", 502)
+            }
         }
 
-        return provider(c, channel.config, requestBody, saveUsage)
+        if (lastFailure) {
+            return lastFailure
+        }
+
+        return c.text("No available channel for request", 400)
     }
 }
 

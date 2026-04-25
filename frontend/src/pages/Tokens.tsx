@@ -30,6 +30,14 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { PageContainer } from '@/components/ui/page-container'
 
+const parseTokenConfig = (value: Token['value']): TokenConfig | null => {
+  try {
+    return typeof value === 'string' ? JSON.parse(value) : value
+  } catch {
+    return null
+  }
+}
+
 type EditMode = 'form' | 'json'
 
 export function Tokens() {
@@ -58,6 +66,11 @@ export function Tokens() {
       return response.data as Token[]
     },
   })
+
+  const dataWithParsedConfig = data?.map((token) => ({
+    ...token,
+    parsedConfig: parseTokenConfig(token.value),
+  }))
 
   useEffect(() => {
     const loadChannels = async () => {
@@ -138,7 +151,11 @@ export function Tokens() {
   const handleEdit = (token: Token) => {
     setEditingKey(token.key)
     setTokenKey(token.key)
-    const config = typeof token.value === 'string' ? JSON.parse(token.value) : token.value
+    const config = parseTokenConfig(token.value)
+    if (!config) {
+      addToast('令牌配置解析失败', 'error')
+      return
+    }
     setFormData(config)
     setJsonValue(JSON.stringify(config, null, 2))
     setSelectedChannels(config.channel_keys || [])
@@ -223,13 +240,12 @@ export function Tokens() {
     { label: '$100', value: 100000000 },
   ]
 
-  const filteredData = data?.filter((token) => {
+  const filteredData = dataWithParsedConfig?.filter((token) => {
     if (!searchQuery) return true
-    const config = typeof token.value === 'string' ? JSON.parse(token.value) : token.value
-    return (
-      config.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      token.key.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    if (token.key.toLowerCase().includes(searchQuery.toLowerCase())) return true
+    if (!token.parsedConfig) return false
+    const config = token.parsedConfig
+    return config.name?.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
   // List View
@@ -292,7 +308,36 @@ export function Tokens() {
           <Card>
             <div className="divide-y">
               {filteredData?.map((token) => {
-                const config = typeof token.value === 'string' ? JSON.parse(token.value) : token.value
+                if (!token.parsedConfig) {
+                  return (
+                    <div
+                      key={token.key}
+                      className="p-4 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-destructive">令牌配置解析失败</div>
+                          <button
+                            onClick={() => handleCopy(token.key)}
+                            className="text-xs text-muted-foreground hover:text-foreground font-mono flex items-center gap-1.5 mt-0.5"
+                          >
+                            {token.key.slice(0, 16)}...
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleResetUsage(token.key)} title="重置额度">
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(token.key)} title="删除">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                const config = token.parsedConfig
                 const channelKeys = config.channel_keys || []
                 const usagePercent = config.total_quota > 0
                   ? Math.min(100, ((token.usage || 0) / config.total_quota) * 100)

@@ -1,13 +1,37 @@
 import { Context } from "hono"
 import { getApiKeyFromHeaders, fetchTokenData, fetchChannelsForToken } from "./auth"
 import { RouteId, getRoutePolicy } from "./route-policy"
-import { findDeploymentMapping, findSupportedModel, getSupportedModels } from "../../utils"
+import {
+    findDeploymentMapping,
+    findSupportedModel,
+    getSupportedModels,
+    getJsonObjectValue,
+} from "../../utils"
 import { TokenUtils } from "../../admin/token_utils"
 
 export type ChannelResolution = {
-    channel: { key: string; config: ChannelConfig }
-    requestBody: any
-    saveUsage: (usage: Usage) => Promise<void>
+    candidates: Array<{
+        channel: { key: string; config: ChannelConfig }
+        requestBody: Record<string, any>
+        saveUsage: (usage: Usage) => Promise<void>
+    }>
+}
+
+const shuffle = <T>(items: Array<T>): Array<T> => {
+    const cloned = [...items];
+    for (let i = cloned.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const temp = cloned[i];
+        cloned[i] = cloned[j];
+        cloned[j] = temp;
+    }
+    return cloned;
+}
+
+const cloneRequestBody = (requestBody: Record<string, any>) => {
+    return structuredClone
+        ? structuredClone(requestBody)
+        : JSON.parse(JSON.stringify(requestBody));
 }
 
 export const resolveChannel = async (
@@ -36,24 +60,25 @@ export const resolveChannel = async (
         return c.text("No available channels for this token", 401);
     }
 
-    let requestBody: any;
+    let requestBody: Record<string, any>;
     try {
         requestBody = await c.req.json();
     } catch (error) {
         return c.text("Invalid JSON body", 400);
     }
+
     const model = requestBody.model;
     if (!model) {
         return c.text("Model is required", 400);
     }
 
     const policy = getRoutePolicy(routeId);
-    const allowedTypes = policy.allowedTypes;
+    const allowedTypes = policy?.allowedTypes;
 
-    const availableChannels: Array<{ key: string, config: ChannelConfig, mapping: { pattern: string, deployment: string } }> = [];
+    const candidates: ChannelResolution["candidates"] = [];
 
     for (const row of channelsResult.results) {
-        const config = (() => { try { return JSON.parse(row.value) as ChannelConfig; } catch { return null; } })();
+        const config = getJsonObjectValue<ChannelConfig>(row.value);
         if (!config) {
             console.error(`Invalid channel config for key: ${row.key}`);
             continue;
@@ -64,7 +89,6 @@ export const resolveChannel = async (
         }
 
         const supportedPattern = findSupportedModel(getSupportedModels(config), model)
-
         if (!supportedPattern) {
             continue;
         }
@@ -74,41 +98,30 @@ export const resolveChannel = async (
             deployment: model,
         };
 
-        if (mapping) {
-            availableChannels.push({
+        const candidateRequestBody = cloneRequestBody(requestBody)
+        candidateRequestBody.model = mapping.deployment;
+
+        candidates.push({
+            channel: {
                 key: row.key,
                 config: config,
-                mapping: mapping
-            });
-        }
+            },
+            requestBody: candidateRequestBody,
+            saveUsage: async (usage: Usage) => {
+                try {
+                    await TokenUtils.processUsage(c, apiKey, candidateRequestBody.model, row.key, config, usage);
+                } catch (error) {
+                    console.error('Error processing usage:', error);
+                }
+            },
+        });
     }
 
-    if (availableChannels.length === 0) {
+    if (candidates.length === 0) {
         return c.text(`Model not supported: ${model}. Please configure supported_models or deployment_mapper.`, 400);
     }
 
-    const randomIndex = Math.floor(Math.random() * availableChannels.length);
-    const selectedChannel = availableChannels[randomIndex];
-    const targetChannelKey = selectedChannel.key;
-    const targetChannelConfig = selectedChannel.config;
-
-    requestBody.model = selectedChannel.mapping.deployment;
-
-    if (!targetChannelConfig.type) {
-        return c.text("Channel type invalid", 400);
-    }
-
-    const saveUsage = async (usage: Usage) => {
-        try {
-            await TokenUtils.processUsage(c, apiKey, requestBody.model, targetChannelKey, targetChannelConfig, usage);
-        } catch (error) {
-            console.error('Error processing usage:', error);
-        }
-    };
-
     return {
-        channel: { key: targetChannelKey, config: targetChannelConfig },
-        requestBody,
-        saveUsage,
+        candidates: shuffle(candidates),
     };
 }

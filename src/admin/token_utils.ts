@@ -8,10 +8,25 @@ export const TokenUtils = {
     async updateUsage(c: Context<HonoCustomType>, key: string, usageAmount: number): Promise<boolean> {
         try {
             const result = await c.env.DB.prepare(
-                `UPDATE api_token SET usage = usage + ?, updated_at = datetime('now') WHERE key = ?`
-            ).bind(usageAmount, key).run();
+                `UPDATE api_token
+                 SET usage = CASE
+                         WHEN json_type(value, '$.total_quota') IN ('integer', 'real')
+                             THEN MAX(usage, MIN(usage + ?, json_extract(value, '$.total_quota')))
+                         ELSE usage + ?
+                     END,
+                     updated_at = datetime('now')
+                 WHERE key = ?`
+            ).bind(usageAmount, usageAmount, key).run();
 
-            return result.success;
+            if (!result.success) {
+                return false;
+            }
+
+            if ((result.meta?.changes ?? 0) === 0) {
+                return false;
+            }
+
+            return true;
         } catch (error) {
             console.error('Error updating token usage:', error);
             return false;
@@ -38,6 +53,11 @@ export const TokenUtils = {
         if (pricing && (hasTokens || requestCost > 0)) {
             const inputCost = hasTokens ? usage.prompt_tokens! * pricing.input : 0;
             const outputCost = hasTokens ? usage.completion_tokens! * pricing.output : 0;
+            const maskedApiKey = apiKey.length < 3 ? '*'.repeat(apiKey.length) : (
+                apiKey.slice(0, apiKey.length / 3)
+                + '*'.repeat(apiKey.length / 3)
+                + apiKey.slice((2 * apiKey.length) / 3)
+            );
 
             let cacheCost = 0;
             if (hasTokens && usage.cached_tokens && usage.cached_tokens > 0 && pricing.cache) {
@@ -46,16 +66,14 @@ export const TokenUtils = {
 
             const totalCost = inputCost + outputCost + cacheCost + requestCost;
 
-            await this.updateUsage(c, apiKey, totalCost);
-
-            const maskedApiKey = apiKey.length < 3 ? '*'.repeat(apiKey.length) : (
-                apiKey.slice(0, apiKey.length / 3)
-                + '*'.repeat(apiKey.length / 3)
-                + apiKey.slice((2 * apiKey.length) / 3)
-            );
+            const updated = await this.updateUsage(c, apiKey, totalCost);
+            if (!updated) {
+                console.warn(`Usage update ignored due to quota limit or conflict. Model: ${model}, Channel: ${targetChannelKey}, apiKey: ${maskedApiKey}, Cost: ${totalCost} (request: ${requestCost}, input: ${inputCost}, cache: ${cacheCost}, output: ${outputCost})`);
+                return;
+            }
             console.log(`Model: ${model}, Channel: ${targetChannelKey}, apiKey: ${maskedApiKey}, Cost: ${totalCost} (request: ${requestCost}, input: ${inputCost}, cache: ${cacheCost}, output: ${outputCost})`);
         } else {
             console.warn(`No pricing found for model: ${model} in channel: ${targetChannelKey}`);
         }
-    }
+    },
 };

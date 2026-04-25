@@ -1,6 +1,6 @@
 import { Context } from "hono";
 
-const getJsonObjectValue = <T = any>(
+export const getJsonObjectValue = <T = any>(
     value: string | any
 ): T | null => {
     if (value == undefined || value == null) {
@@ -15,7 +15,7 @@ const getJsonObjectValue = <T = any>(
     try {
         return JSON.parse(value) as T;
     } catch (e) {
-        console.error(`GetJsonValue: Failed to parse ${value}`, e);
+        console.error(`GetJsonValue: Failed to parse JSON string (length: ${value.length})`, e);
     }
     return null;
 }
@@ -28,12 +28,7 @@ export const getJsonSetting = async <T = any>(
     if (!value) {
         return null;
     }
-    try {
-        return JSON.parse(value) as T;
-    } catch (e) {
-        console.error(`GetJsonSetting: Failed to parse ${key}`, e);
-    }
-    return null;
+    return getJsonObjectValue<T>(value);
 }
 
 export const getSetting = async (

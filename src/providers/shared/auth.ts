@@ -1,4 +1,5 @@
 import { Context } from "hono"
+import { getJsonObjectValue } from "../../utils"
 
 export const getApiKeyFromHeaders = (c: Context<HonoCustomType>): string | null => {
     const authHeader = c.req.raw.headers.get('Authorization');
@@ -21,9 +22,13 @@ export const fetchTokenData = async (c: Context<HonoCustomType>, apiKey: string)
     if (!tokenResult || !tokenResult.value) {
         return null;
     }
+    const tokenData = getJsonObjectValue<ApiTokenData>(tokenResult.value);
+    if (!tokenData) {
+        return null;
+    }
 
     return {
-        tokenData: JSON.parse(tokenResult.value as string) as ApiTokenData,
+        tokenData: tokenData,
         usage: tokenResult.usage as number || 0,
     };
 }

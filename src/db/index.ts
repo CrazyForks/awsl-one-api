@@ -1,6 +1,6 @@
 import { Context } from "hono";
 import { CONSTANTS } from "../constants";
-import { getSetting, saveSetting } from "../utils";
+import { getJsonObjectValue, getSetting, saveSetting } from "../utils";
 
 const DB_INIT_QUERIES = `
 CREATE TABLE IF NOT EXISTS channel_config (
@@ -48,13 +48,7 @@ const dbOperations = {
             ).all<Pick<ChannelConfigRow, "key" | "value">>();
 
             for (const row of channels.results || []) {
-                const config = (() => {
-                    try {
-                        return JSON.parse(row.value) as ChannelConfig;
-                    } catch {
-                        return null;
-                    }
-                })();
+                const config = getJsonObjectValue<ChannelConfig>(row.value);
 
                 if (!config) {
                     continue;

@@ -28,6 +28,14 @@ import {
 } from 'lucide-react'
 import { PageContainer } from '@/components/ui/page-container'
 
+const parseChannelConfig = (value: Channel['value']): ChannelConfig | null => {
+  try {
+    return typeof value === 'string' ? JSON.parse(value) : value
+  } catch {
+    return null
+  }
+}
+
 type EditMode = 'form' | 'json'
 
 const channelTypes = [
@@ -71,6 +79,11 @@ export function Channels() {
       return response.data as Channel[]
     },
   })
+
+  const dataWithParsedConfig = data?.map((channel) => ({
+    ...channel,
+    parsedConfig: parseChannelConfig(channel.value),
+  }))
 
   useEffect(() => {
     const handleClick = () => setOpenMenu(null)
@@ -132,7 +145,11 @@ export function Channels() {
   const handleEdit = (channel: Channel) => {
     setEditingKey(channel.key)
     setChannelKey(channel.key)
-    const config = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+    const config = parseChannelConfig(channel.value)
+    if (!config) {
+      addToast('频道配置解析失败', 'error')
+      return
+    }
     setFormData(config)
     setJsonValue(JSON.stringify(config, null, 2))
     setSupportedModelRows((config.supported_models || []).map((model) => ({ model })))
@@ -263,13 +280,12 @@ export function Channels() {
     return channelTypes.find((t) => t.value === type)?.label || type
   }
 
-  const filteredData = data?.filter((channel) => {
+  const filteredData = dataWithParsedConfig?.filter((channel) => {
     if (!searchQuery) return true
-    const config = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
-    return (
-      config.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      channel.key.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    if (channel.key.toLowerCase().includes(searchQuery.toLowerCase())) return true
+    if (!channel.parsedConfig) return false
+    const config = channel.parsedConfig
+    return config.name?.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
   // List View
@@ -332,7 +348,25 @@ export function Channels() {
           <Card>
             <div className="divide-y">
               {filteredData?.map((channel) => {
-                const config = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+                if (!channel.parsedConfig) {
+                  return (
+                    <div
+                      key={channel.key}
+                      className="p-4 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-destructive">频道配置解析失败</div>
+                          <div className="text-xs text-muted-foreground font-mono truncate">{channel.key}</div>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive flex-shrink-0" onClick={() => handleDelete(channel.key)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                }
+                const config = channel.parsedConfig
                 const modelCount = (config.supported_models || []).length
                 const isMenuOpen = openMenu === channel.key
 
