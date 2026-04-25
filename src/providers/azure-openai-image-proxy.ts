@@ -53,7 +53,7 @@ export default {
         const response = await fetch(proxyRequest)
 
         if (response.ok) {
-            await checkoutImageUsage(saveUsage, response)
+            c.executionCtx.waitUntil(checkoutImageUsage(saveUsage, response.clone()))
         }
 
         return response

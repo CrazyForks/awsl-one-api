@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/api/client'
-import { AudioTestResponse, TestResponse } from '@/types'
+import { AudioTestResponse, ImageTestResponse, TestResponse } from '@/types'
 import { Send, Clock, CheckCircle, XCircle, Copy, Download, History } from 'lucide-react'
 import { PageContainer } from '@/components/ui/page-container'
 import { cn, copyToClipboard } from '@/lib/utils'
@@ -91,9 +91,13 @@ export function ApiTest() {
     return !!value && value.object === 'audio' && typeof value.url === 'string'
   }
 
+  const isImageResponse = (value: TestResponse | { error: string } | null): value is ImageTestResponse => {
+    return !!value && value.object === 'image' && typeof value.url === 'string'
+  }
+
   useEffect(() => {
     return () => {
-      if (isAudioResponse(response)) {
+      if (isAudioResponse(response) || (isImageResponse(response) && response.url.startsWith('blob:'))) {
         URL.revokeObjectURL(response.url)
       }
     }
@@ -132,6 +136,14 @@ export function ApiTest() {
               size: response.size,
               filename: response.filename,
             }
+          : isImageResponse(response)
+            ? {
+                object: response.object,
+                contentType: response.contentType,
+                count: response.count,
+                filename: response.filename,
+                usage: response.usage,
+              }
           : response
         await copyToClipboard(JSON.stringify(payload, null, 2))
         addToast('已复制到剪贴板', 'success')
@@ -346,6 +358,31 @@ export function ApiTest() {
                     <a href={response.url} download={response.filename}>
                       <Download className="h-4 w-4" />
                       下载音频
+                    </a>
+                  </Button>
+                </div>
+              ) : isImageResponse(response) ? (
+                <div className="space-y-4 rounded-lg bg-muted/50 p-4">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">图片返回成功</div>
+                    <div className="text-xs text-muted-foreground font-mono">
+                      {response.contentType} · {response.count} image{response.count > 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <img
+                    src={response.url}
+                    alt="API test image response"
+                    className="max-h-[420px] w-full rounded-lg border object-contain bg-background"
+                  />
+                  {response.usage && (
+                    <pre className="whitespace-pre-wrap break-words text-xs font-mono bg-slate-950 text-slate-100 rounded-lg p-3">
+                      {JSON.stringify(response.usage, null, 2)}
+                    </pre>
+                  )}
+                  <Button asChild variant="outline" size="sm">
+                    <a href={response.url} download={response.filename}>
+                      <Download className="h-4 w-4" />
+                      下载图片
                     </a>
                   </Button>
                 </div>

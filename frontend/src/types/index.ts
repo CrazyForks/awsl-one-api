@@ -61,6 +61,21 @@ export interface AudioTestResponse {
   filename: string
 }
 
+export interface ImageTestResponse {
+  object: 'image'
+  contentType: string
+  count: number
+  url: string
+  filename: string
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    total_tokens?: number
+    prompt_tokens?: number
+    completion_tokens?: number
+  }
+}
+
 export interface JsonTestResponse {
   id?: string
   model?: string
@@ -79,4 +94,4 @@ export interface JsonTestResponse {
   [key: string]: any
 }
 
-export type TestResponse = JsonTestResponse | AudioTestResponse
+export type TestResponse = JsonTestResponse | AudioTestResponse | ImageTestResponse

@@ -1,4 +1,4 @@
-import { ApiResponse, AudioTestResponse, TestResponse } from '@/types'
+import { ApiResponse, AudioTestResponse, ImageTestResponse, TestResponse } from '@/types'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -121,6 +121,66 @@ function buildAudioFilename(endpoint: string, contentType: string): string {
   return `${suffix}.${extension}`
 }
 
+function buildImageFilename(endpoint: string, contentType: string): string {
+  const extension = contentType.split('/')[1]?.split(';')[0] || 'png'
+  const suffix = endpoint.split('/').filter(Boolean).join('-') || 'image'
+  return `${suffix}.${extension}`
+}
+
+function base64ToBlobUrl(base64: string, contentType: string): { url: string; size: number } {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+
+  const blob = new Blob([bytes], { type: contentType })
+  return {
+    url: URL.createObjectURL(blob),
+    size: blob.size,
+  }
+}
+
+type ImageApiPayload = {
+  data?: Array<{
+    b64_json?: string
+    url?: string
+  }>
+  usage?: ImageTestResponse['usage']
+}
+
+function extractImageTestResponse(endpoint: string, payload: ImageApiPayload): ImageTestResponse | null {
+  const firstImage = Array.isArray(payload.data) ? payload.data[0] : null
+  const imageUrl = typeof firstImage?.url === 'string' ? firstImage.url : null
+  const b64Json = typeof firstImage?.b64_json === 'string' ? firstImage.b64_json : null
+  const contentType = 'image/png'
+
+  if (imageUrl) {
+    return {
+      object: 'image',
+      contentType,
+      count: payload.data?.length ?? 0,
+      url: imageUrl,
+      filename: buildImageFilename(endpoint, contentType),
+      usage: payload.usage,
+    }
+  }
+
+  if (!b64Json) {
+    return null
+  }
+
+  const image = base64ToBlobUrl(b64Json, contentType)
+  return {
+    object: 'image',
+    contentType,
+    count: payload.data?.length ?? 0,
+    url: image.url,
+    filename: buildImageFilename(endpoint, contentType),
+    usage: payload.usage,
+  }
+}
+
 // 统一请求方法
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${BASE_URL}${endpoint}`
@@ -215,6 +275,13 @@ export const apiClient = {
           filename: buildAudioFilename(endpoint, contentType),
         }
         return audioResponse
+      }
+
+      if (endpoint.startsWith('/v1/images/') && contentType.includes('application/json')) {
+        const payload = await response.json()
+        const imageResponse = extractImageTestResponse(endpoint, payload)
+        if (imageResponse) return imageResponse
+        return payload
       }
     }
 
