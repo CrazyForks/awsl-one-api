@@ -43,6 +43,13 @@ const requestTemplates: Record<string, any> = {
     input: 'The quick brown fox jumped over the lazy dog',
     voice: 'alloy',
   },
+  '/v1/images/generations': {
+    model: 'gpt-image-2',
+    prompt: 'A clean product dashboard screenshot with crisp typography',
+    size: '1024x1024',
+    quality: 'high',
+    n: 1,
+  },
 }
 
 type TestHistoryItem = {
