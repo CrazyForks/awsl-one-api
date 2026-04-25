@@ -37,6 +37,8 @@ type ChannelType =
     | "openai"
     | "azure-openai-audio"
     | "openai-audio"
+    | "azure-openai-image"
+    | "openai-image"
     | "claude"
     | "claude-to-openai"
     | "openai-responses"

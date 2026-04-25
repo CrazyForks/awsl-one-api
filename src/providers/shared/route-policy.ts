@@ -1,4 +1,4 @@
-export type RouteId = "chat-completions" | "messages" | "responses" | "audio-speech"
+export type RouteId = "chat-completions" | "messages" | "responses" | "audio-speech" | "image-generations"
 
 type RoutePolicy = {
     allowedTypes: ChannelType[] | null
@@ -16,6 +16,7 @@ const ROUTE_POLICIES: Record<RouteId, RoutePolicy> = {
     "messages":         { allowedTypes: TEXT_CHANNEL_TYPES },
     "responses":        { allowedTypes: ["openai-responses", "azure-openai-responses"] },
     "audio-speech":     { allowedTypes: ["openai-audio", "azure-openai-audio"] },
+    "image-generations": { allowedTypes: ["openai-image", "azure-openai-image"] },
 }
 
 export const resolveRouteId = (pathname: string): RouteId | null => {
@@ -23,6 +24,7 @@ export const resolveRouteId = (pathname: string): RouteId | null => {
     if (pathname.endsWith("/messages")) return "messages"
     if (pathname.endsWith("/responses")) return "responses"
     if (pathname.endsWith("/audio/speech")) return "audio-speech"
+    if (pathname.endsWith("/images/generations")) return "image-generations"
     return null
 }
 

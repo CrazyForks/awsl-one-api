@@ -25,6 +25,8 @@ const providerLabels: Record<string, string> = {
   'azure-openai': 'Azure',
   'openai-audio': 'OpenAI Audio',
   'azure-openai-audio': 'Azure Audio',
+  'openai-image': 'OpenAI Image',
+  'azure-openai-image': 'Azure Image',
   claude: 'Claude',
   'claude-to-openai': 'Claude Compat',
   'openai-responses': 'Responses',

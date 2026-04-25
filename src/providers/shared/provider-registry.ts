@@ -2,6 +2,10 @@ import { Context } from "hono"
 
 import azureOpenaiProxy from "../azure-openai-proxy"
 import openaiProxy from "../openai-proxy"
+import azureOpenaiAudioProxy from "../azure-openai-audio-proxy"
+import openaiAudioProxy from "../openai-audio-proxy"
+import azureOpenaiImageProxy from "../azure-openai-image-proxy"
+import openaiImageProxy from "../openai-image-proxy"
 import claudeProxy from "../claude-proxy"
 import claudeToOpenaiProxy from "../claude-to-openai-proxy"
 import openaiResponsesProxy from "../openai-responses-proxy"
@@ -17,8 +21,10 @@ type ProviderFetch = (
 const providerMap: Record<string, ProviderFetch> = {
     "azure-openai": azureOpenaiProxy.fetch,
     "openai": openaiProxy.fetch,
-    "azure-openai-audio": azureOpenaiProxy.fetch,
-    "openai-audio": openaiProxy.fetch,
+    "azure-openai-audio": azureOpenaiAudioProxy.fetch,
+    "openai-audio": openaiAudioProxy.fetch,
+    "azure-openai-image": azureOpenaiImageProxy.fetch,
+    "openai-image": openaiImageProxy.fetch,
     "claude": claudeProxy.fetch,
     "claude-to-openai": claudeToOpenaiProxy.fetch,
     "openai-responses": openaiResponsesProxy.fetch,

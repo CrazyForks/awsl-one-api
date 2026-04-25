@@ -44,6 +44,8 @@ const channelTypes = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'azure-openai-audio', label: 'Azure OpenAI Audio' },
   { value: 'openai-audio', label: 'OpenAI Audio' },
+  { value: 'azure-openai-image', label: 'Azure OpenAI Image' },
+  { value: 'openai-image', label: 'OpenAI Image' },
   { value: 'claude', label: 'Claude' },
   { value: 'claude-to-openai', label: 'Claude → OpenAI' },
   { value: 'openai-responses', label: 'OpenAI Responses' },
@@ -581,7 +583,7 @@ export function Channels() {
                         placeholder="sk-..."
                       />
                     </div>
-                    {(formData.type === 'azure-openai' || formData.type === 'azure-openai-audio' || formData.type === 'claude' || formData.type === 'azure-openai-responses') && (
+                    {(formData.type === 'azure-openai' || formData.type === 'azure-openai-audio' || formData.type === 'azure-openai-image' || formData.type === 'claude' || formData.type === 'azure-openai-responses') && (
                       <div className="space-y-2">
                         <Label className="text-sm">API 版本</Label>
                         <Input
