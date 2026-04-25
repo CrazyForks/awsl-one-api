@@ -22,7 +22,6 @@ import {
   ArrowLeft,
   Check,
   MoreHorizontal,
-  ChevronRight,
   AlertCircle,
   Search,
   RotateCcw,
@@ -312,7 +311,7 @@ export function Tokens() {
                   return (
                     <div
                       key={token.key}
-                      className="p-4 hover:bg-muted/30 transition-colors"
+                      className="p-3 hover:bg-muted/30 transition-colors"
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex-1 min-w-0">
@@ -347,13 +346,16 @@ export function Tokens() {
                 return (
                   <div
                     key={token.key}
-                    className="p-4 hover:bg-muted/30 transition-colors"
+                    className="p-3 hover:bg-muted/30 transition-colors"
                   >
                     {/* Mobile Layout */}
                     <div className="md:hidden space-y-3">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{config.name}</div>
+                          <div className="flex items-center gap-2 font-medium truncate">
+                            <span className={cn("h-2 w-2 rounded-full", usagePercent > 90 ? "bg-destructive" : usagePercent > 70 ? "bg-warning" : "bg-success")} />
+                            {config.name}
+                          </div>
                           <button
                             onClick={() => handleCopy(token.key)}
                             className="text-xs text-muted-foreground hover:text-foreground font-mono flex items-center gap-1.5 mt-0.5"
@@ -424,6 +426,7 @@ export function Tokens() {
                     <div className="hidden md:flex md:items-center md:gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
+                          <span className={cn("h-2 w-2 rounded-full", usagePercent > 90 ? "bg-destructive" : usagePercent > 70 ? "bg-warning" : "bg-success")} />
                           <span className="font-medium">{config.name}</span>
                           <span className="text-xs text-muted-foreground font-mono">
                             {token.key.slice(0, 12)}...{token.key.slice(-4)}

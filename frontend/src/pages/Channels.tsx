@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
-import { cn } from '@/lib/utils'
+import { cn, copyToClipboard } from '@/lib/utils'
 import {
   Plus,
   RefreshCw,
@@ -25,6 +25,7 @@ import {
   ArrowRight,
   Globe,
   Cpu,
+  Copy,
 } from 'lucide-react'
 import { PageContainer } from '@/components/ui/page-container'
 
@@ -167,6 +168,15 @@ export function Channels() {
   const handleDelete = (key: string) => {
     if (confirm(`确定要删除此频道吗？`)) {
       deleteMutation.mutate(key)
+    }
+  }
+
+  const handleCopy = async (text: string) => {
+    try {
+      await copyToClipboard(text)
+      addToast('已复制到剪贴板', 'success')
+    } catch {
+      addToast('复制失败', 'error')
     }
   }
 
@@ -352,7 +362,7 @@ export function Channels() {
                   return (
                     <div
                       key={channel.key}
-                      className="p-4 hover:bg-muted/30 transition-colors"
+                      className="p-3 hover:bg-muted/30 transition-colors"
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex-1 min-w-0">
@@ -373,13 +383,16 @@ export function Channels() {
                 return (
                   <div
                     key={channel.key}
-                    className="p-4 hover:bg-muted/30 transition-colors"
+                    className="p-3 hover:bg-muted/30 transition-colors"
                   >
                     {/* Mobile Layout */}
                     <div className="md:hidden space-y-3">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{config.name}</div>
+                          <div className="flex items-center gap-2 font-medium truncate">
+                            <span className={cn("h-2 w-2 rounded-full", config.endpoint && config.api_key ? "bg-success" : "bg-warning")} />
+                            {config.name}
+                          </div>
                           <div className="text-xs text-muted-foreground font-mono mt-0.5">{channel.key}</div>
                         </div>
                         <div className="relative">
@@ -427,8 +440,18 @@ export function Channels() {
                     {/* Desktop Layout */}
                     <div className="hidden md:flex md:items-center md:gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium">{config.name}</div>
-                        <div className="text-xs text-muted-foreground font-mono">{channel.key}</div>
+                        <div className="flex items-center gap-2 font-medium">
+                          <span className={cn("h-2 w-2 rounded-full", config.endpoint && config.api_key ? "bg-success" : "bg-warning")} />
+                          <span className="truncate">{config.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground font-mono"
+                          onClick={() => handleCopy(channel.key)}
+                        >
+                          {channel.key}
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                       <div className="flex-shrink-0">
                         <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs font-medium whitespace-nowrap">

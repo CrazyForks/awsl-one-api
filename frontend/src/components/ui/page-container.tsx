@@ -17,12 +17,12 @@ export function PageContainer({
   className,
 }: PageContainerProps) {
   return (
-    <div className={cn("p-4 md:p-6 lg:p-8 animate-in", className)}>
-      <div className="mb-6 md:mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className={cn("p-4 md:p-5 lg:p-6 animate-in", className)}>
+      <div className="mb-5 md:mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{title}</h1>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight">{title}</h1>
           {description && (
-            <p className="text-muted-foreground mt-1.5 text-sm md:text-base">{description}</p>
+            <p className="text-muted-foreground mt-1 text-sm">{description}</p>
           )}
         </div>
         {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}

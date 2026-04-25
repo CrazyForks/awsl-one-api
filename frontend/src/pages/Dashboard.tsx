@@ -1,175 +1,328 @@
+import { useMemo } from 'react'
+import type { ComponentType } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
-import { Globe, Gauge, BarChart3, Shield, Zap, ArrowRight, Sparkles } from 'lucide-react'
+import { Activity, ArrowRight, BarChart3, Database, Gauge, Key, Link as LinkIcon, Lock, Server, Shield, TestTube2, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth'
 import { Link } from 'react-router-dom'
+import { apiClient } from '@/api/client'
+import { Channel, ChannelConfig, Token, TokenConfig } from '@/types'
+import { cn, formatCurrency } from '@/lib/utils'
 
-const features = [
-  {
-    icon: Globe,
-    title: '多提供商支持',
-    description: '支持 OpenAI、Azure OpenAI、Claude 等多种 AI 服务提供商。',
-    gradient: 'from-blue-500/10 to-cyan-500/10',
-    iconBg: 'from-blue-500 to-cyan-500',
-    delay: '0ms',
-  },
-  {
-    icon: Gauge,
-    title: '负载均衡',
-    description: '自动在多个频道间分配请求，确保高可用性。',
-    gradient: 'from-emerald-500/10 to-teal-500/10',
-    iconBg: 'from-emerald-500 to-teal-500',
-    delay: '50ms',
-  },
-  {
-    icon: BarChart3,
-    title: '用量追踪',
-    description: '实时监控 token 使用情况，精确成本核算。',
-    gradient: 'from-amber-500/10 to-orange-500/10',
-    iconBg: 'from-amber-500 to-orange-500',
-    delay: '100ms',
-  },
-  {
-    icon: Shield,
-    title: '安全管理',
-    description: '基于令牌的访问控制与独立 API 密钥分配。',
-    gradient: 'from-violet-500/10 to-purple-500/10',
-    iconBg: 'from-violet-500 to-purple-500',
-    delay: '150ms',
-  },
-]
+const parseConfig = <T,>(value: string | T): T | null => {
+  if (typeof value !== 'string') return value
 
-const steps = [
-  { num: '01', title: '管理员登录', desc: '使用管理员令牌登录系统', color: 'text-blue-500' },
-  { num: '02', title: '配置频道', desc: '添加 AI 服务提供商频道', color: 'text-emerald-500' },
-  { num: '03', title: '创建令牌', desc: '为应用创建 API 令牌', color: 'text-amber-500' },
-  { num: '04', title: '开始使用', desc: '使用令牌调用 API', color: 'text-violet-500' },
-]
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return null
+  }
+}
+
+const providerLabels: Record<string, string> = {
+  openai: 'OpenAI',
+  'azure-openai': 'Azure',
+  'openai-audio': 'OpenAI Audio',
+  'azure-openai-audio': 'Azure Audio',
+  claude: 'Claude',
+  'claude-to-openai': 'Claude Compat',
+  'openai-responses': 'Responses',
+  'azure-openai-responses': 'Azure Responses',
+}
+
+function StatCard({
+  title,
+  value,
+  detail,
+  icon: Icon,
+  tone = 'primary',
+}: {
+  title: string
+  value: string
+  detail: string
+  icon: ComponentType<{ className?: string }>
+  tone?: 'primary' | 'success' | 'warning' | 'info'
+}) {
+  const toneClass = {
+    primary: 'bg-primary/10 text-primary',
+    success: 'bg-success/10 text-success',
+    warning: 'bg-warning/10 text-warning',
+    info: 'bg-info/10 text-info',
+  }[tone]
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+          </div>
+          <div className={cn('rounded-md p-2', toneClass)}>
+            <Icon className="h-4 w-4" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 export function Dashboard() {
   const { isAuthenticated, openAuthModal } = useAuthStore()
 
+  const channelsQuery = useQuery({
+    queryKey: ['channels'],
+    queryFn: async () => {
+      const response = await apiClient.getChannels()
+      return response.data as Channel[]
+    },
+    enabled: isAuthenticated,
+  })
+
+  const tokensQuery = useQuery({
+    queryKey: ['tokens'],
+    queryFn: async () => {
+      const response = await apiClient.getTokens()
+      return response.data as Token[]
+    },
+    enabled: isAuthenticated,
+  })
+
+  const summary = useMemo(() => {
+    const channels = channelsQuery.data || []
+    const tokens = tokensQuery.data || []
+    const parsedChannels = channels
+      .map((channel) => parseConfig<ChannelConfig>(channel.value))
+      .filter((config): config is ChannelConfig => !!config)
+    const parsedTokens = tokens
+      .map((token) => ({
+        token,
+        config: parseConfig<TokenConfig>(token.value),
+      }))
+      .filter((item): item is { token: Token; config: TokenConfig } => !!item.config)
+
+    const providerCounts = parsedChannels.reduce<Record<string, number>>((acc, config) => {
+      const label = providerLabels[config.type] || config.type || 'Unknown'
+      acc[label] = (acc[label] || 0) + 1
+      return acc
+    }, {})
+
+    const totalUsage = parsedTokens.reduce((sum, item) => sum + (item.token.usage || 0), 0)
+    const totalQuota = parsedTokens.reduce((sum, item) => sum + (item.config.total_quota || 0), 0)
+    const boundTokens = parsedTokens.filter((item) => (item.config.channel_keys || []).length > 0).length
+
+    return {
+      channels: parsedChannels.length,
+      invalidChannels: channels.length - parsedChannels.length,
+      tokens: parsedTokens.length,
+      invalidTokens: tokens.length - parsedTokens.length,
+      providerCounts,
+      totalUsage,
+      totalQuota,
+      boundTokens,
+      quotaPercent: totalQuota > 0 ? Math.min(100, (totalUsage / totalQuota) * 100) : 0,
+    }
+  }, [channelsQuery.data, tokensQuery.data])
+
+  const isLoading = channelsQuery.isLoading || tokensQuery.isLoading
+  const hasSummaryError = channelsQuery.isError || tokensQuery.isError
+
   return (
-    <div className="animate-in">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden">
-        <div className="gradient-mesh grid-pattern">
-          <div className="px-4 md:px-6 lg:px-8 py-12 md:py-16 lg:py-20">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/8 border border-primary/10 text-primary text-sm font-medium mb-6">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Unified AI Gateway</span>
-              </div>
-              <h1 className="text-4xl md:text-5xl lg:text-[3.5rem] font-bold tracking-tight leading-[1.1] mb-5">
-                <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text text-transparent">
-                  Awsl One API
-                </span>
-              </h1>
-              <p className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-8 max-w-2xl">
-                统一的 AI 模型接口网关。支持多服务商接入、智能负载均衡与精确用量追踪。
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {isAuthenticated ? (
-                  <>
-                    <Button size="lg" asChild className="h-12 px-6 text-[15px] rounded-xl shadow-lg shadow-primary/20">
-                      <Link to="/channels">
-                        管理频道
-                        <ArrowRight className="h-4 w-4 ml-1" />
-                      </Link>
-                    </Button>
-                    <Button variant="outline" size="lg" asChild className="h-12 px-6 text-[15px] rounded-xl">
-                      <Link to="/api-test">测试 API</Link>
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button size="lg" onClick={openAuthModal} className="h-12 px-6 text-[15px] rounded-xl shadow-lg shadow-primary/20">
-                      管理员登录
-                      <ArrowRight className="h-4 w-4 ml-1" />
-                    </Button>
-                    <Button variant="outline" size="lg" asChild className="h-12 px-6 text-[15px] rounded-xl">
-                      <Link to="/api-test">体验 API</Link>
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Decorative elements */}
-        <div className="absolute top-12 right-8 w-72 h-72 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 right-1/4 w-48 h-48 bg-violet-500/5 rounded-full blur-3xl pointer-events-none" />
-      </div>
-
-      <div className="px-4 md:px-6 lg:px-8 pb-8 space-y-10">
-        {/* Features Grid */}
+    <div className="p-4 md:p-5 lg:p-6 animate-in">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-px flex-1 bg-border" />
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">核心特性</h2>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
-            {features.map((feature) => (
-              <Card key={feature.title} className="group hover-lift border-0 bg-gradient-to-br from-card to-card overflow-hidden">
-                <CardContent className="p-6 relative">
-                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-                  <div className="relative">
-                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${feature.iconBg} flex items-center justify-center mb-4 shadow-lg`}>
-                      <feature.icon className="h-5 w-5 text-white" />
-                    </div>
-                    <h3 className="font-semibold mb-1.5 text-[15px]">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight">控制台</h1>
+          <p className="mt-1 text-sm text-muted-foreground">AI 网关配置、配额和测试入口</p>
         </div>
-
-        {/* Quick Start */}
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <div className="p-6 pb-2">
-              <h2 className="text-lg font-semibold mb-1">快速开始</h2>
-              <p className="text-sm text-muted-foreground">四步完成配置，开始使用统一接口</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border">
-              {steps.map((step) => (
-                <div key={step.num} className="p-6 group">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0">
-                      <span className={`text-2xl font-bold ${step.color} opacity-60 group-hover:opacity-100 transition-opacity`}>
-                        {step.num}
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold mb-1 text-sm">{step.title}</h4>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{step.desc}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Supported Providers */}
-        <div className="text-center py-4">
-          <p className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-4">支持的服务提供商</p>
-          <div className="flex items-center justify-center gap-6 flex-wrap text-muted-foreground/40">
-            {['OpenAI', 'Azure OpenAI', 'Claude', 'OpenAI Responses'].map((name) => (
-              <div key={name} className="flex items-center gap-2 text-sm font-medium hover:text-muted-foreground transition-colors">
-                <Zap className="h-3.5 w-3.5" />
-                {name}
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/api-test">
+              <TestTube2 className="h-4 w-4" />
+              API 测试
+            </Link>
+          </Button>
+          {isAuthenticated ? (
+            <Button size="sm" asChild>
+              <Link to="/channels">
+                <LinkIcon className="h-4 w-4" />
+                管理频道
+              </Link>
+            </Button>
+          ) : (
+            <Button size="sm" onClick={openAuthModal}>
+              <Lock className="h-4 w-4" />
+              管理员登录
+            </Button>
+          )}
         </div>
       </div>
+
+      {!isAuthenticated ? (
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <Card>
+            <CardContent className="p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <div className="rounded-md bg-primary/10 p-2 text-primary">
+                  <Zap className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-semibold">Awsl One API</div>
+                  <div className="text-xs text-muted-foreground">统一 AI 网关管理后台</div>
+                </div>
+              </div>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                登录后可查看频道、令牌和配额状态。未登录时仍可进入 API 测试页，用已有业务令牌验证转发链路。
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button onClick={openAuthModal}>
+                  <Lock className="h-4 w-4" />
+                  管理员登录
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link to="/api-test">
+                    测试 API
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5">
+              <div className="mb-3 text-sm font-semibold">可用代理端点</div>
+              <div className="space-y-2">
+                {['/v1/chat/completions', '/v1/messages', '/v1/responses', '/v1/audio/speech'].map((endpoint) => (
+                  <div key={endpoint} className="rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">
+                    {endpoint}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              title="频道"
+              value={hasSummaryError || isLoading ? '-' : String(summary.channels)}
+              detail={hasSummaryError ? '读取失败' : summary.invalidChannels > 0 ? `${summary.invalidChannels} 条配置异常` : '可用于请求路由'}
+              icon={Server}
+              tone={hasSummaryError || summary.invalidChannels > 0 ? 'warning' : 'primary'}
+            />
+            <StatCard
+              title="令牌"
+              value={hasSummaryError || isLoading ? '-' : String(summary.tokens)}
+              detail={hasSummaryError ? '读取失败' : `${summary.boundTokens} 个限制频道范围`}
+              icon={Key}
+              tone={hasSummaryError ? 'warning' : 'success'}
+            />
+            <StatCard
+              title="用量"
+              value={hasSummaryError || isLoading ? '-' : formatCurrency(summary.totalUsage)}
+              detail={hasSummaryError ? '读取失败' : `总配额 ${formatCurrency(summary.totalQuota)}`}
+              icon={BarChart3}
+              tone={hasSummaryError || summary.quotaPercent > 80 ? 'warning' : 'info'}
+            />
+            <StatCard
+              title="健康"
+              value={hasSummaryError ? '异常' : summary.invalidTokens + summary.invalidChannels > 0 ? '检查' : '正常'}
+              detail={hasSummaryError ? '管理数据读取失败' : `${summary.invalidTokens + summary.invalidChannels} 条解析异常`}
+              icon={Shield}
+              tone={hasSummaryError || summary.invalidTokens + summary.invalidChannels > 0 ? 'warning' : 'success'}
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <Card>
+              <CardContent className="p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">服务商分布</div>
+                    <div className="text-xs text-muted-foreground">来自频道配置的静态摘要</div>
+                  </div>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to="/channels">查看频道</Link>
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {hasSummaryError ? (
+                    <div className="rounded-md border border-dashed p-5 text-center text-sm text-warning">
+                      管理数据读取失败，请刷新或重新登录
+                    </div>
+                  ) : Object.keys(summary.providerCounts).length === 0 ? (
+                    <div className="rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
+                      暂无频道配置
+                    </div>
+                  ) : (
+                    Object.entries(summary.providerCounts).map(([provider, count]) => (
+                      <div key={provider} className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-primary" />
+                          <span className="text-sm font-medium">{provider}</span>
+                        </div>
+                        <span className="font-mono text-sm text-muted-foreground">{count}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="mb-4 text-sm font-semibold">配额水位</div>
+                <div className="mb-2 flex items-end justify-between">
+                  <span className="text-2xl font-semibold">{summary.quotaPercent.toFixed(0)}%</span>
+                  <span className="text-xs text-muted-foreground">{formatCurrency(summary.totalUsage)} / {formatCurrency(summary.totalQuota)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all',
+                      summary.quotaPercent > 90 ? 'bg-destructive' : summary.quotaPercent > 70 ? 'bg-warning' : 'bg-primary'
+                    )}
+                    style={{ width: `${summary.quotaPercent}%` }}
+                  />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/tokens">
+                      <Key className="h-4 w-4" />
+                      令牌
+                    </Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/database">
+                      <Database className="h-4 w-4" />
+                      数据库
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              { icon: Gauge, title: '路由配置', desc: '维护模型映射和服务商端点', href: '/channels' },
+              { icon: Activity, title: '调用验证', desc: '快速验证业务令牌请求链路', href: '/api-test' },
+              { icon: BarChart3, title: '定价规则', desc: '检查模型输入、输出和请求成本', href: '/pricing' },
+            ].map((item) => (
+              <Link key={item.href} to={item.href} className="group rounded-lg border bg-card p-4 shadow-soft transition-colors hover:bg-muted/30">
+                <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:text-foreground">
+                  <item.icon className="h-4 w-4" />
+                </div>
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="mt-1 text-xs leading-5 text-muted-foreground">{item.desc}</div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

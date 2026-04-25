@@ -4,12 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/api/client'
 import { AudioTestResponse, TestResponse } from '@/types'
-import { Send, Clock, CheckCircle, XCircle, Copy, Download } from 'lucide-react'
+import { Send, Clock, CheckCircle, XCircle, Copy, Download, History } from 'lucide-react'
 import { PageContainer } from '@/components/ui/page-container'
 import { cn, copyToClipboard } from '@/lib/utils'
 
@@ -46,6 +45,27 @@ const requestTemplates: Record<string, any> = {
   },
 }
 
+type TestHistoryItem = {
+  endpoint: string
+  requestBody: string
+  statusCode: number
+  responseTime: number
+  createdAt: number
+}
+
+const historyStorageKey = 'api-test-history'
+
+const loadHistory = (): TestHistoryItem[] => {
+  try {
+    const raw = localStorage.getItem(historyStorageKey)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.slice(0, 5) : []
+  } catch {
+    return []
+  }
+}
+
 export function ApiTest() {
   const [endpoint, setEndpoint] = useState('/v1/chat/completions')
   const [apiToken, setApiToken] = useState('')
@@ -56,6 +76,7 @@ export function ApiTest() {
   const [response, setResponse] = useState<any>(null)
   const [responseTime, setResponseTime] = useState<number>(0)
   const [statusCode, setStatusCode] = useState<number | null>(null)
+  const [history, setHistory] = useState<TestHistoryItem[]>(loadHistory)
 
   const { addToast } = useToast()
 
@@ -74,6 +95,24 @@ export function ApiTest() {
   const handleEndpointChange = (newEndpoint: string) => {
     setEndpoint(newEndpoint)
     setRequestBody(JSON.stringify(requestTemplates[newEndpoint], null, 2))
+  }
+
+  const saveHistory = (item: TestHistoryItem) => {
+    const nextHistory = [
+      item,
+      ...history.filter((entry) => entry.endpoint !== item.endpoint || entry.requestBody !== item.requestBody),
+    ].slice(0, 5)
+    setHistory(nextHistory)
+    try {
+      localStorage.setItem(historyStorageKey, JSON.stringify(nextHistory))
+    } catch {
+      // History is a convenience feature; storage failures must not affect API test results.
+    }
+  }
+
+  const restoreHistory = (item: TestHistoryItem) => {
+    setEndpoint(item.endpoint)
+    setRequestBody(item.requestBody)
   }
 
   const handleCopyResponse = async () => {
@@ -123,11 +162,26 @@ export function ApiTest() {
       setResponseTime(endTime - startTime)
       setResponse(result)
       setStatusCode(200)
+      saveHistory({
+        endpoint,
+        requestBody,
+        statusCode: 200,
+        responseTime: endTime - startTime,
+        createdAt: Date.now(),
+      })
     } catch (error: any) {
       const endTime = Date.now()
+      const nextStatusCode = error.status || 500
       setResponseTime(endTime - startTime)
-      setStatusCode(error.status || 500)
+      setStatusCode(nextStatusCode)
       setResponse({ error: error.message })
+      saveHistory({
+        endpoint,
+        requestBody,
+        statusCode: nextStatusCode,
+        responseTime: endTime - startTime,
+        createdAt: Date.now(),
+      })
     } finally {
       setIsLoading(false)
     }
@@ -150,15 +204,23 @@ export function ApiTest() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">端点</Label>
-                <Select
-                  value={endpoint}
-                  onChange={(e) => handleEndpointChange(e.target.value)}
-                >
-                  <option value="/v1/chat/completions">/v1/chat/completions</option>
-                  <option value="/v1/messages">/v1/messages</option>
-                  <option value="/v1/responses">/v1/responses</option>
-                  <option value="/v1/audio/speech">/v1/audio/speech</option>
-                </Select>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {Object.keys(requestTemplates).map((templateEndpoint) => (
+                    <button
+                      key={templateEndpoint}
+                      type="button"
+                      onClick={() => handleEndpointChange(templateEndpoint)}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-left font-mono text-xs transition-colors",
+                        endpoint === templateEndpoint
+                          ? "border-primary bg-primary/8 text-primary"
+                          : "bg-background hover:bg-muted/50"
+                      )}
+                    >
+                      {templateEndpoint}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -194,6 +256,30 @@ export function ApiTest() {
                   </>
                 )}
               </Button>
+
+              {history.length > 0 && (
+                <div className="rounded-lg border bg-muted/20 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    <History className="h-3.5 w-3.5" />
+                    最近请求
+                  </div>
+                  <div className="space-y-1">
+                    {history.map((item) => (
+                      <button
+                        key={`${item.createdAt}-${item.endpoint}`}
+                        type="button"
+                        onClick={() => restoreHistory(item)}
+                        className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-xs hover:bg-background"
+                      >
+                        <span className="truncate font-mono">{item.endpoint}</span>
+                        <span className={cn("font-mono", item.statusCode === 200 ? "text-success" : "text-destructive")}>
+                          {item.statusCode} · {item.responseTime}ms
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
@@ -257,7 +343,7 @@ export function ApiTest() {
                   </Button>
                 </div>
               ) : (
-                <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-muted/50 rounded-lg p-4 max-h-[500px] overflow-y-auto scrollbar-thin">
+                <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-slate-950 text-slate-100 rounded-lg p-4 max-h-[500px] overflow-y-auto scrollbar-thin">
                   {JSON.stringify(response, null, 2)}
                 </pre>
               )

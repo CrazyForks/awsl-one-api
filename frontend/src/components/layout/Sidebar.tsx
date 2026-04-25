@@ -97,7 +97,7 @@ export function Sidebar({
         onClick={() => onNavigate?.()}
         title={collapsed ? item.title : undefined}
         className={cn(
-          'group relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150',
+          'group relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150',
           collapsed && 'justify-center px-0 w-10 h-10 mx-auto',
           isActive
             ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
@@ -117,23 +117,23 @@ export function Sidebar({
     <aside
       className={cn(
         "bg-card border-r flex flex-col h-full transition-all duration-300 ease-out",
-        collapsed ? "w-[68px]" : "w-60",
+        collapsed ? "w-[68px]" : "w-56",
         className
       )}
     >
       {/* Header */}
       <div className={cn(
-        "h-14 flex items-center border-b px-4",
+        "h-[52px] flex items-center border-b px-3",
         collapsed ? "justify-center px-0" : "justify-between"
       )}>
         {collapsed ? (
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
             <Zap className="h-4 w-4 text-white" />
           </div>
         ) : (
           <>
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-md shadow-primary/15">
+              <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center shadow-sm shadow-primary/15">
                 <Zap className="h-4 w-4 text-white" />
               </div>
               <div className="flex flex-col">
@@ -178,10 +178,10 @@ export function Sidebar({
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-2.5 py-2 space-y-5 overflow-y-auto scrollbar-thin">
+      <nav className="flex-1 px-2 py-2 space-y-4 overflow-y-auto scrollbar-thin">
         <div className="space-y-0.5">
           {!collapsed && (
-            <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
+            <div className="px-2.5 py-1 text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wide">
               概览
             </div>
           )}
@@ -196,7 +196,7 @@ export function Sidebar({
           <>
             <div className="space-y-0.5">
               {!collapsed && (
-                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
+                <div className="px-2.5 py-1 text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wide">
                   管理
                 </div>
               )}
@@ -209,7 +209,7 @@ export function Sidebar({
 
             <div className="space-y-0.5">
               {!collapsed && (
-                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
+                <div className="px-2.5 py-1 text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wide">
                   系统
                 </div>
               )}
