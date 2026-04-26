@@ -35,6 +35,24 @@ CREATE TABLE IF NOT EXISTS settings (
 
 const CREATE_TOKEN_USAGE_PERIOD_TABLE_QUERY = "CREATE TABLE IF NOT EXISTS api_token_usage_period (token_key TEXT NOT NULL, period_type TEXT NOT NULL, period_key TEXT NOT NULL, usage REAL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (token_key, period_type, period_key));";
 
+const REQUIRED_TABLES = [
+    "channel_config",
+    "api_token",
+    "api_token_usage_period",
+    "settings",
+];
+
+const countRows = async (c: Context<HonoCustomType>, tableName: string): Promise<number | null> => {
+    try {
+        const row = await c.env.DB.prepare(
+            `SELECT COUNT(*) AS count FROM ${tableName}`
+        ).first<{ count: number }>();
+        return row?.count ?? 0;
+    } catch {
+        return null;
+    }
+}
+
 const dbOperations = {
     initialize: async (c: Context<HonoCustomType>) => {
         // remove all \r and \n characters from the query string
@@ -86,6 +104,32 @@ const dbOperations = {
     },
     getVersion: async (c: Context<HonoCustomType>): Promise<string | null> => {
         return await getSetting(c, CONSTANTS.DB_VERSION_KEY);
+    },
+    getStatus: async (c: Context<HonoCustomType>) => {
+        const version = await getSetting(c, CONSTANTS.DB_VERSION_KEY);
+        const tableRows = await c.env.DB.prepare(
+            `SELECT name FROM sqlite_master WHERE type = 'table'`
+        ).all<{ name: string }>();
+        const existingTables = new Set((tableRows.results || []).map((row) => row.name));
+        const tables = REQUIRED_TABLES.map((name) => ({
+            name,
+            exists: existingTables.has(name),
+        }));
+
+        const counts = {
+            channels: await countRows(c, "channel_config"),
+            tokens: await countRows(c, "api_token"),
+            periodUsageRows: await countRows(c, "api_token_usage_period"),
+            settings: await countRows(c, "settings"),
+        };
+
+        return {
+            version,
+            expectedVersion: CONSTANTS.DB_VERSION,
+            isCurrent: version === CONSTANTS.DB_VERSION,
+            tables,
+            counts,
+        };
     }
 }
 

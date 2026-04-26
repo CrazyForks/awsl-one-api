@@ -23,3 +23,20 @@ export class DBInitializeEndpoint extends OpenAPIRoute {
         } as CommonResponse;
     }
 }
+
+export class DBStatusEndpoint extends OpenAPIRoute {
+    schema = {
+        tags: ['Admin API'],
+        responses: {
+            ...CommonSuccessfulResponse(z.any()),
+            ...CommonErrorResponse,
+        },
+    };
+
+    async handle(c: Context<HonoCustomType>) {
+        return {
+            success: true,
+            data: await db.getStatus(c)
+        } as CommonResponse;
+    }
+}

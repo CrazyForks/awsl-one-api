@@ -1,6 +1,6 @@
 import { Context, Hono, Next } from "hono"
 import { fromHono } from 'chanfana';
-import { DBInitializeEndpoint } from "./db_api"
+import { DBInitializeEndpoint, DBStatusEndpoint } from "./db_api"
 import {
     ChannelGetEndpoint, ChannelUpsertEndpoint, ChannelDeleteEndpoint
 } from "./channel_api"
@@ -26,6 +26,7 @@ app.use('/api/admin/*', async (c, next) => {
 });
 
 api.post("/api/admin/db_initialize", DBInitializeEndpoint)
+api.get("/api/admin/db_status", DBStatusEndpoint)
 
 api.get("/api/admin/channel", ChannelGetEndpoint)
 api.post("/api/admin/channel/:key", ChannelUpsertEndpoint)

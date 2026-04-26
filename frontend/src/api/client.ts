@@ -249,6 +249,8 @@ export const apiClient = {
     }),
 
   // Database APIs
+  getDatabaseStatus: () => request<ApiResponse>('/api/admin/db_status', { method: 'GET' }),
+
   initDatabase: () => request('/api/admin/db_initialize', { method: 'POST' }),
 
   // API Test - 使用自定义 token，不走通用拦截器
