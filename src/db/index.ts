@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `
 
+const CREATE_TOKEN_USAGE_PERIOD_TABLE_QUERY = "CREATE TABLE IF NOT EXISTS api_token_usage_period (token_key TEXT NOT NULL, period_type TEXT NOT NULL, period_key TEXT NOT NULL, usage REAL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (token_key, period_type, period_key));";
+
 const dbOperations = {
     initialize: async (c: Context<HonoCustomType>) => {
         // remove all \r and \n characters from the query string
@@ -55,17 +57,7 @@ const dbOperations = {
             return;
         }
 
-        await c.env.DB.exec(`
-            CREATE TABLE IF NOT EXISTS api_token_usage_period (
-                token_key TEXT NOT NULL,
-                period_type TEXT NOT NULL,
-                period_key TEXT NOT NULL,
-                usage REAL DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (token_key, period_type, period_key)
-            );
-        `);
+        await c.env.DB.exec(CREATE_TOKEN_USAGE_PERIOD_TABLE_QUERY);
 
         if (version !== "v0.0.2") {
             const channels = await c.env.DB.prepare(
