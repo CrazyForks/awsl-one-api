@@ -1,22 +1,47 @@
 import { Context } from "hono";
 
 import { CONSTANTS } from "../constants";
-import { getJsonSetting } from "../utils";
+import { getJsonObjectValue, getJsonSetting } from "../utils";
+
+const isPositiveNumber = (value: unknown): value is number => {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
 
 // Token 工具对象
 export const TokenUtils = {
     async updateUsage(c: Context<HonoCustomType>, key: string, usageAmount: number): Promise<boolean> {
         try {
-            const result = await c.env.DB.prepare(
+            const tokenRow = await c.env.DB.prepare(
+                `SELECT value FROM api_token WHERE key = ?`
+            ).bind(key).first<Pick<ApiTokenRow, "value">>();
+            const tokenData = tokenRow?.value
+                ? getJsonObjectValue<ApiTokenData>(tokenRow.value)
+                : null;
+            if (!tokenData) {
+                return false;
+            }
+
+            const updateUsageStatement = c.env.DB.prepare(
                 `UPDATE api_token
-                 SET usage = CASE
-                         WHEN json_type(value, '$.total_quota') IN ('integer', 'real')
-                             THEN MAX(usage, MIN(usage + ?, json_extract(value, '$.total_quota')))
-                         ELSE usage + ?
-                     END,
+                 SET usage = usage + ?,
                      updated_at = datetime('now')
                  WHERE key = ?`
-            ).bind(usageAmount, usageAmount, key).run();
+            ).bind(usageAmount, key);
+
+            const hasPeriodQuota = isPositiveNumber(tokenData.daily_quota)
+                || isPositiveNumber(tokenData.monthly_quota);
+
+            if (hasPeriodQuota) {
+                const results = await c.env.DB.batch([
+                    updateUsageStatement,
+                    this.buildPeriodUsageStatement(c, key, 'day', usageAmount),
+                    this.buildPeriodUsageStatement(c, key, 'month', usageAmount),
+                ]);
+                const totalResult = results[0];
+                return totalResult.success && (totalResult.meta?.changes ?? 0) > 0;
+            }
+
+            const result = await updateUsageStatement.run();
 
             if (!result.success) {
                 return false;
@@ -26,11 +51,46 @@ export const TokenUtils = {
                 return false;
             }
 
+            await this.updatePeriodUsage(c, key, 'day', usageAmount);
+            await this.updatePeriodUsage(c, key, 'month', usageAmount);
+
             return true;
         } catch (error) {
             console.error('Error updating token usage:', error);
             return false;
         }
+    },
+    async updatePeriodUsage(
+        c: Context<HonoCustomType>,
+        key: string,
+        periodType: 'day' | 'month',
+        usageAmount: number
+    ): Promise<boolean> {
+        try {
+            const result = await this.buildPeriodUsageStatement(c, key, periodType, usageAmount).run();
+            return result.success;
+        } catch (error) {
+            console.warn(`Period usage update skipped for ${periodType}:`, error);
+            return false;
+        }
+    },
+    buildPeriodUsageStatement(
+        c: Context<HonoCustomType>,
+        key: string,
+        periodType: 'day' | 'month',
+        usageAmount: number
+    ) {
+        const periodKeyExpression = periodType === 'day'
+            ? "date('now')"
+            : "strftime('%Y-%m', 'now')";
+
+        return c.env.DB.prepare(
+            `INSERT INTO api_token_usage_period (token_key, period_type, period_key, usage)
+             VALUES (?, ?, ${periodKeyExpression}, ?)
+             ON CONFLICT(token_key, period_type, period_key) DO UPDATE SET
+             usage = usage + ?,
+             updated_at = datetime('now')`
+        ).bind(key, periodType, usageAmount, usageAmount);
     },
     async getPricing(c: Context<HonoCustomType>, model: string, channelConfig: ChannelConfig): Promise<ModelPricing | null> {
         // Check channel-specific pricing first
@@ -47,12 +107,14 @@ export const TokenUtils = {
         console.log("Usage data:", usage);
 
         const pricing = await this.getPricing(c, model, targetChannelConfig);
-        const hasTokens = usage.prompt_tokens != null && usage.completion_tokens != null;
+        const hasInputTokens = usage.prompt_tokens != null;
+        const hasOutputTokens = usage.completion_tokens != null;
+        const hasTokens = hasInputTokens || hasOutputTokens;
         const requestCost = pricing?.request || 0
 
         if (pricing && (hasTokens || requestCost > 0)) {
-            const inputCost = hasTokens ? usage.prompt_tokens! * pricing.input : 0;
-            const outputCost = hasTokens ? usage.completion_tokens! * pricing.output : 0;
+            const inputCost = hasInputTokens ? usage.prompt_tokens! * pricing.input : 0;
+            const outputCost = hasOutputTokens ? usage.completion_tokens! * pricing.output : 0;
             const maskedApiKey = apiKey.length < 3 ? '*'.repeat(apiKey.length) : (
                 apiKey.slice(0, apiKey.length / 3)
                 + '*'.repeat(apiKey.length / 3)
@@ -60,7 +122,7 @@ export const TokenUtils = {
             );
 
             let cacheCost = 0;
-            if (hasTokens && usage.cached_tokens && usage.cached_tokens > 0 && pricing.cache) {
+            if (hasInputTokens && usage.cached_tokens && usage.cached_tokens > 0 && pricing.cache) {
                 cacheCost = usage.cached_tokens * pricing.cache;
             }
 

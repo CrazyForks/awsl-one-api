@@ -3,6 +3,7 @@ import { Context } from "hono"
 export const checkoutUsageData = async (
     saveUsage: (usage: Usage) => Promise<void>,
     response: Response | OpenAIResponse,
+    _requestBody?: any,
 ): Promise<void> => {
     try {
         if (response instanceof Response) {

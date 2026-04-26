@@ -47,6 +47,8 @@ export function Tokens() {
     name: '',
     channel_keys: [],
     total_quota: 0,
+    daily_quota: 0,
+    monthly_quota: 0,
   })
   const [tokenKey, setTokenKey] = useState('')
   const [jsonValue, setJsonValue] = useState('')
@@ -133,7 +135,7 @@ export function Tokens() {
   })
 
   const resetForm = () => {
-    setFormData({ name: '', channel_keys: [], total_quota: 0 })
+    setFormData({ name: '', channel_keys: [], total_quota: 0, daily_quota: 0, monthly_quota: 0 })
     setTokenKey('')
     setJsonValue('')
     setSelectedChannels([])
@@ -341,6 +343,12 @@ export function Tokens() {
                 const usagePercent = config.total_quota > 0
                   ? Math.min(100, ((token.usage || 0) / config.total_quota) * 100)
                   : 0
+                const dailyUsagePercent = config.daily_quota && config.daily_quota > 0
+                  ? Math.min(100, ((token.daily_usage || 0) / config.daily_quota) * 100)
+                  : 0
+                const monthlyUsagePercent = config.monthly_quota && config.monthly_quota > 0
+                  ? Math.min(100, ((token.monthly_usage || 0) / config.monthly_quota) * 100)
+                  : 0
                 const isMenuOpen = openMenu === token.key
 
                 return (
@@ -411,6 +419,16 @@ export function Tokens() {
                           配额: <span className="text-foreground">{formatCurrency(token.usage || 0)}/{formatCurrency(config.total_quota || 0)}</span>
                         </span>
                       </div>
+                      {(config.daily_quota || config.monthly_quota) && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          {config.daily_quota ? (
+                            <span>今日: <span className="text-foreground">{formatCurrency(token.daily_usage || 0)}/{formatCurrency(config.daily_quota)}</span></span>
+                          ) : null}
+                          {config.monthly_quota ? (
+                            <span>本月: <span className="text-foreground">{formatCurrency(token.monthly_usage || 0)}/{formatCurrency(config.monthly_quota)}</span></span>
+                          ) : null}
+                        </div>
+                      )}
                       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
                           className={cn(
@@ -453,6 +471,22 @@ export function Tokens() {
                             {usagePercent.toFixed(0)}%
                           </span>
                         </div>
+                        {(config.daily_quota || config.monthly_quota) && (
+                          <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
+                            {config.daily_quota ? (
+                              <div className="flex items-center justify-between gap-2">
+                                <span>今日</span>
+                                <span>{dailyUsagePercent.toFixed(0)}%</span>
+                              </div>
+                            ) : null}
+                            {config.monthly_quota ? (
+                              <div className="flex items-center justify-between gap-2">
+                                <span>本月</span>
+                                <span>{monthlyUsagePercent.toFixed(0)}%</span>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
                             className={cn(
@@ -600,13 +634,38 @@ export function Tokens() {
                 <h3 className="font-medium mb-1">使用配额</h3>
                 <p className="text-sm text-muted-foreground mb-4">设置令牌的最大使用额度（1百万 token = $1.00）</p>
                 <div className="space-y-4">
-                  <Input
-                    type="number"
-                    value={formData.total_quota}
-                    onChange={(e) => setFormData({ ...formData, total_quota: parseInt(e.target.value) || 0 })}
-                    placeholder="1000000"
-                    min="0"
-                  />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">总额度</Label>
+                      <Input
+                        type="number"
+                        value={formData.total_quota}
+                        onChange={(e) => setFormData({ ...formData, total_quota: parseInt(e.target.value) || 0 })}
+                        placeholder="1000000"
+                        min="0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">每日额度</Label>
+                      <Input
+                        type="number"
+                        value={formData.daily_quota || 0}
+                        onChange={(e) => setFormData({ ...formData, daily_quota: parseInt(e.target.value) || 0 })}
+                        placeholder="0"
+                        min="0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">每月额度</Label>
+                      <Input
+                        type="number"
+                        value={formData.monthly_quota || 0}
+                        onChange={(e) => setFormData({ ...formData, monthly_quota: parseInt(e.target.value) || 0 })}
+                        placeholder="0"
+                        min="0"
+                      />
+                    </div>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {quotaPresets.map((preset) => (
                       <button
@@ -637,7 +696,7 @@ export function Tokens() {
                 onChange={(e) => setJsonValue(e.target.value)}
                 rows={14}
                 className="font-mono text-sm"
-                placeholder='{"name": "令牌名称", "channel_keys": [], "total_quota": 1000000}'
+                placeholder='{"name": "令牌名称", "channel_keys": [], "total_quota": 1000000, "daily_quota": 100000, "monthly_quota": 1000000}'
               />
             </CardContent>
           </Card>

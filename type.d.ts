@@ -30,6 +30,8 @@ type ApiTokenRow = BaseDbRow & {
     key: string;
     value: string; // JSON 字符串，解析后为 ApiTokenData 类型
     usage: number;
+    daily_usage?: number;
+    monthly_usage?: number;
 }
 
 type ChannelType =
@@ -94,4 +96,6 @@ type ApiTokenData = {
     name: string;
     channel_keys: string[];
     total_quota: number;
+    daily_quota?: number;
+    monthly_quota?: number;
 }

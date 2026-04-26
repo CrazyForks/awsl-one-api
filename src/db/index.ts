@@ -16,6 +16,15 @@ CREATE TABLE IF NOT EXISTS api_token (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS api_token_usage_period (
+    token_key TEXT NOT NULL,
+    period_type TEXT NOT NULL,
+    period_key TEXT NOT NULL,
+    usage REAL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (token_key, period_type, period_key)
+);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT,
@@ -42,7 +51,23 @@ const dbOperations = {
     },
     migrate: async (c: Context<HonoCustomType>) => {
         const version = await getSetting(c, CONSTANTS.DB_VERSION_KEY);
-        if (version != CONSTANTS.DB_VERSION) {
+        if (version === CONSTANTS.DB_VERSION) {
+            return;
+        }
+
+        await c.env.DB.exec(`
+            CREATE TABLE IF NOT EXISTS api_token_usage_period (
+                token_key TEXT NOT NULL,
+                period_type TEXT NOT NULL,
+                period_key TEXT NOT NULL,
+                usage REAL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (token_key, period_type, period_key)
+            );
+        `);
+
+        if (version !== "v0.0.2") {
             const channels = await c.env.DB.prepare(
                 "SELECT key, value FROM channel_config"
             ).all<Pick<ChannelConfigRow, "key" | "value">>();
@@ -62,10 +87,10 @@ const dbOperations = {
                      WHERE key = ?`
                 ).bind(JSON.stringify(config), row.key).run();
             }
-
-            // Update the version in the settings table
-            await saveSetting(c, CONSTANTS.DB_VERSION_KEY, CONSTANTS.DB_VERSION);
         }
+
+        // Update the version in the settings table
+        await saveSetting(c, CONSTANTS.DB_VERSION_KEY, CONSTANTS.DB_VERSION);
     },
     getVersion: async (c: Context<HonoCustomType>): Promise<string | null> => {
         return await getSetting(c, CONSTANTS.DB_VERSION_KEY);

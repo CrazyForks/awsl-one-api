@@ -18,12 +18,16 @@ export interface Token {
   key: string
   value: string | TokenConfig
   usage?: number
+  daily_usage?: number
+  monthly_usage?: number
 }
 
 export interface TokenConfig {
   name: string
   channel_keys?: string[]
   total_quota: number
+  daily_quota?: number
+  monthly_quota?: number
 }
 
 export interface PricingModel {
@@ -47,6 +51,7 @@ export interface TestRequest {
     role: string
     content: string
   }>
+  input?: string | string[]
   prompt?: string
   max_tokens?: number
   temperature?: number

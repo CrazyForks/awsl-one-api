@@ -48,10 +48,22 @@ export const resolveChannel = async (
         return c.text("Invalid API key", 401);
     }
 
-    const { tokenData, usage } = tokenInfo;
+    const { tokenData, usage, dailyUsage, monthlyUsage, periodUsageAvailable } = tokenInfo;
 
     if (usage >= tokenData.total_quota) {
         return c.text("Quota exceeded", 402);
+    }
+
+    if (!periodUsageAvailable) {
+        return c.text("Period quota usage unavailable. Please initialize or migrate the database.", 503);
+    }
+
+    if (tokenData.daily_quota != null && tokenData.daily_quota > 0 && dailyUsage >= tokenData.daily_quota) {
+        return c.text("Daily quota exceeded", 402);
+    }
+
+    if (tokenData.monthly_quota != null && tokenData.monthly_quota > 0 && monthlyUsage >= tokenData.monthly_quota) {
+        return c.text("Monthly quota exceeded", 402);
     }
 
     const channelsResult = await fetchChannelsForToken(c, tokenData);

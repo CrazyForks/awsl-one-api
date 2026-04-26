@@ -50,6 +50,10 @@ const requestTemplates: Record<string, any> = {
     quality: 'high',
     n: 1,
   },
+  '/v1/embeddings': {
+    model: 'text-embedding-3-small',
+    input: 'The quick brown fox jumped over the lazy dog',
+  },
 }
 
 type TestHistoryItem = {
